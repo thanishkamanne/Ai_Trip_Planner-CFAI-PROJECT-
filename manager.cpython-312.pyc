@@ -1,0 +1,48 @@
+import networkx as nx
+import random
+
+class CityNetwork:
+    def __init__(self):
+        self.graph = nx.Graph()
+        self.cities = [
+            "Hyderabad", "Bengaluru", "Chennai", "Mumbai", "Delhi",
+            "Pune", "Jaipur", "Kochi", "Kolkata", "Ahmedabad"
+        ]
+        self._initialize_network()
+
+    def _initialize_network(self):
+        # Add nodes
+        for city in self.cities:
+            self.graph.add_node(city)
+
+        # Pre-defined major connections with base values
+        connections = [
+            ("Mumbai", "Pune", 150), ("Mumbai", "Ahmedabad", 530),
+            ("Mumbai", "Bengaluru", 980), ("Mumbai", "Delhi", 1400),
+            ("Bengaluru", "Chennai", 350), ("Bengaluru", "Hyderabad", 570),
+            ("Bengaluru", "Kochi", 550), ("Chennai", "Hyderabad", 630),
+            ("Hyderabad", "Mumbai", 710), ("Hyderabad", "Delhi", 1500),
+            ("Delhi", "Jaipur", 280), ("Delhi", "Ahmedabad", 950),
+            ("Delhi", "Kolkata", 1500), ("Kolkata", "Chennai", 1600),
+            ("Kolkata", "Hyderabad", 1500), ("Jaipur", "Ahmedabad", 670),
+            ("Kochi", "Chennai", 700)
+        ]
+
+        for u, v, dist in connections:
+            self.graph.add_edge(u, v, 
+                distance=dist,
+                cost=dist * random.uniform(2, 5),
+                time=dist / random.uniform(50, 80),
+                traffic=random.uniform(0.1, 0.9),
+                weather_risk=random.uniform(0.0, 0.5)
+            )
+
+    def get_dynamic_data(self):
+        # Simulate dynamic changes
+        dynamic_graph = self.graph.copy()
+        for u, v, d in dynamic_graph.edges(data=True):
+            d['traffic'] = random.uniform(0.1, 1.0)
+            d['weather_risk'] = random.uniform(0.0, 0.6)
+            d['cost'] = d['distance'] * random.uniform(2, 6) * (1 + d['traffic'] * 0.2)
+            d['time'] = (d['distance'] / random.uniform(40, 70)) * (1 + d['traffic'] * 0.5)
+        return dynamic_graph

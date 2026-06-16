@@ -1,0 +1,170 @@
+import customtkinter as ctk
+from ai_trip_planner.engine.models import TripRequest, TransportType, HotelPreference, RiskTolerance
+from tkinter import messagebox
+
+class Dashboard:
+    def __init__(self, root, auth_manager, ai_engine, visualizer):
+        self.root = root
+        self.auth_manager = auth_manager
+        self.ai_engine = ai_engine
+        self.visualizer = visualizer
+        self.setup_ui()
+
+    def setup_ui(self):
+        # Sidebar
+        self.sidebar = ctk.CTkFrame(self.root, width=200, corner_radius=0)
+        self.sidebar.pack(side="left", fill="y")
+        
+        ctk.CTkLabel(self.sidebar, text="TRIP AI", font=("Helvetica", 20, "bold")).pack(pady=20)
+        
+        buttons = [
+            ("New Trip", self.show_planner),
+            ("Saved Trips", self.show_saved),
+            ("Analytics", self.show_analytics),
+            ("Logout", self.handle_logout)
+        ]
+        
+        for text, cmd in buttons:
+            ctk.CTkButton(self.sidebar, text=text, command=cmd, fg_color="transparent", anchor="w").pack(fill="x", padx=10, pady=5)
+
+        # Main Content Area
+        self.content_area = ctk.CTkFrame(self.root)
+        self.content_area.pack(side="right", fill="both", expand=True, padx=20, pady=20)
+        
+        self.show_planner()
+
+    def clear_content(self):
+        for widget in self.content_area.winfo_children():
+            widget.destroy()
+
+    def show_planner(self):
+        self.clear_content()
+        ctk.CTkLabel(self.content_area, text="Plan Your Smart Trip", font=("Helvetica", 22, "bold")).pack(pady=10)
+        
+        form = ctk.CTkFrame(self.content_area)
+        form.pack(fill="both", expand=True)
+
+        # Inputs
+        cities = self.ai_engine.city_network.cities
+        
+        ctk.CTkLabel(form, text="Source City").grid(row=0, column=0, padx=10, pady=10)
+        self.src_cb = ctk.CTkComboBox(form, values=cities)
+        self.src_cb.grid(row=0, column=1, padx=10, pady=10)
+
+        ctk.CTkLabel(form, text="Destination City").grid(row=0, column=2, padx=10, pady=10)
+        self.dest_cb = ctk.CTkComboBox(form, values=cities)
+        self.dest_cb.grid(row=0, column=3, padx=10, pady=10)
+
+        ctk.CTkLabel(form, text="Budget (INR)").grid(row=1, column=0, padx=10, pady=10)
+        self.budget_ent = ctk.CTkEntry(form, placeholder_text="e.g. 50000")
+        self.budget_ent.grid(row=1, column=1, padx=10, pady=10)
+
+        ctk.CTkLabel(form, text="Duration (Days)").grid(row=1, column=2, padx=10, pady=10)
+        self.dur_ent = ctk.CTkEntry(form, placeholder_text="e.g. 5")
+        self.dur_ent.grid(row=1, column=3, padx=10, pady=10)
+
+        ctk.CTkLabel(form, text="Hotel").grid(row=2, column=0, padx=10, pady=10)
+        self.hotel_cb = ctk.CTkComboBox(form, values=[e.value for e in HotelPreference])
+        self.hotel_cb.grid(row=2, column=1, padx=10, pady=10)
+
+        ctk.CTkLabel(form, text="Transport").grid(row=2, column=2, padx=10, pady=10)
+        self.trans_cb = ctk.CTkComboBox(form, values=[e.value for e in TransportType])
+        self.trans_cb.grid(row=2, column=3, padx=10, pady=10)
+
+        ctk.CTkLabel(form, text="Risk Tolerance").grid(row=3, column=0, padx=10, pady=10)
+        self.risk_cb = ctk.CTkComboBox(form, values=[e.value for e in RiskTolerance])
+        self.risk_cb.grid(row=3, column=1, padx=10, pady=10)
+
+        ctk.CTkButton(form, text="Generate AI Recommendations", command=self.generate_trip).grid(row=4, column=0, columnspan=4, pady=20)
+
+        # Results area
+        self.results_frame = ctk.CTkScrollableFrame(self.content_area, height=300)
+        self.results_frame.pack(fill="both", expand=True, pady=10)
+
+    def generate_trip(self):
+        try:
+            req = TripRequest(
+                source=self.src_cb.get(),
+                destination=self.dest_cb.get(),
+                budget=float(self.budget_ent.get()),
+                duration=int(self.dur_ent.get()),
+                hotel_pref=HotelPreference(self.hotel_cb.get()),
+                transport_pref=TransportType(self.trans_cb.get()),
+                risk_tolerance=RiskTolerance(self.risk_cb.get())
+            )
+            
+            if req.source == req.destination:
+                messagebox.showerror("Error", "Source and Destination cannot be same")
+                return
+
+            recs = self.ai_engine.get_recommendations(req)
+            self.display_recommendations(recs)
+        except ValueError:
+            messagebox.showerror("Error", "Please enter valid numeric values for budget and duration")
+
+    def display_recommendations(self, recs):
+        for widget in self.results_frame.winfo_children():
+            widget.destroy()
+            
+        if not recs:
+            ctk.CTkLabel(self.results_frame, text="No routes found within budget. Try increasing budget.").pack()
+            return
+
+        for i, rec in enumerate(recs):
+            f = ctk.CTkFrame(self.results_frame)
+            f.pack(fill="x", pady=5, padx=5)
+            
+            title = f"Option {i+1}: via {rec.algorithm} Algorithm"
+            ctk.CTkLabel(f, text=title, font=("Helvetica", 14, "bold")).pack(anchor="w", padx=10)
+            
+            info = f"Route: {' -> '.join(rec.path)} | Cost: ₹{rec.total_cost} | Time: {rec.total_time:.1f} hrs | Risk: {rec.max_risk}"
+            ctk.CTkLabel(f, text=info).pack(anchor="w", padx=10)
+            
+            ctk.CTkLabel(f, text=f"AI Insight: {rec.explanation}", text_color="gray").pack(anchor="w", padx=10)
+            
+            btn_f = ctk.CTkFrame(f, fg_color="transparent")
+            btn_f.pack(anchor="e", padx=10, pady=5)
+            
+            ctk.CTkButton(btn_f, text="Visualize", width=100, command=lambda r=rec: self.visualizer.plot_route(r)).pack(side="left", padx=5)
+            ctk.CTkButton(btn_f, text="Save Trip", width=100, command=lambda r=rec: self.save_trip(r)).pack(side="left", padx=5)
+
+    def save_trip(self, route):
+        data = {
+            "path": route.path,
+            "cost": route.total_cost,
+            "algorithm": route.algorithm,
+            "date": "2026-06-06"
+        }
+        if self.auth_manager.save_trip(data):
+            messagebox.showinfo("Success", "Trip saved successfully!")
+
+    def show_saved(self):
+        self.clear_content()
+        ctk.CTkLabel(self.content_area, text="Your Saved Trips", font=("Helvetica", 22, "bold")).pack(pady=10)
+        
+        scroll = ctk.CTkScrollableFrame(self.content_area)
+        scroll.pack(fill="both", expand=True)
+        
+        if not self.auth_manager.current_user.saved_trips:
+            ctk.CTkLabel(scroll, text="No saved trips yet.").pack()
+            return
+            
+        for trip in self.auth_manager.current_user.saved_trips:
+            f = ctk.CTkFrame(scroll)
+            f.pack(fill="x", pady=5, padx=5)
+            txt = f"{' -> '.join(trip['path'])} | Cost: ₹{trip['cost']} | Algo: {trip['algorithm']}"
+            ctk.CTkLabel(f, text=txt).pack(side="left", padx=10, pady=10)
+
+    def show_analytics(self):
+        self.clear_content()
+        ctk.CTkLabel(self.content_area, text="Algorithm Performance Analytics", font=("Helvetica", 22, "bold")).pack(pady=10)
+        # Placeholder for matplotlib integration
+        btn = ctk.CTkButton(self.content_area, text="Generate Comparison Report", command=self.visualizer.show_analytics)
+        btn.pack(pady=20)
+        
+        ctk.CTkLabel(self.content_area, text="This will open a Matplotlib window showing performance metrics of different search algorithms.").pack()
+
+    def handle_logout(self):
+        self.auth_manager.logout()
+        # This will be handled by main.py to switch back to login screen
+        self.root.event_generate("<<Logout>>")
